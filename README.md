@@ -58,8 +58,16 @@ def tf_function(a, b):
 
 session = tf.compat.v1.Session()
 f = tfpyth.wrap_torch_from_tensorflow(
-        tf_function, ["a", "b"], None, session=session
-    ) # automatically creates placeholders inside
+        tf_function, ["a", "b"], session=session
+    )
+# or simpler
+f = tfpyth.wrap_torch_from_tensorflow(
+        tf_function, session=session
+    ) # automatically creates placeholders for "a" and "b" inside
+# or even simpler
+f = tfpyth.wrap_torch_from_tensorflow(
+        tf_function
+    ) # automatically creates placeholders for "a" and "b" and session
 
 a_ = th.tensor(1, dtype=th.float32, requires_grad=True)
 b_ = th.tensor(3, dtype=th.float32, requires_grad=True)

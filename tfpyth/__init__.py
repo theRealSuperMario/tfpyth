@@ -78,6 +78,7 @@ def wrap_torch_from_tensorflow(func, tensor_inputs=None, input_shapes=None, sess
         Tensorflow function to evaluate
     :param tensor_input: List[str] 
         List of argument names to `func` that represent a tensor input.
+        if not provided will interpret all arguments from func as tensorflow placeholders.
     :param input_shapes: List[Tuple[Int]]. 
         Shapes of input tensors if known. Some operations require these, such as all `tf.image.resize`.
         Basically these values are fed to `tf.placeholder`, so you can indicate unknown parameters using `(None, 64, 64, 1)`, for instance.
