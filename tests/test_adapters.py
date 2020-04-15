@@ -55,3 +55,57 @@ def test_tensorflow_in_pytorch():
     x.backward()
 
     assert np.allclose((a_.grad, b_.grad), (3.0, 24.0))
+
+
+class Test_wrap_torch_from_tensorflow:
+    def test_image_operation(self):
+        def tensorflow_function(a, size=(128, 128)):
+            return tf.image.resize(a, size=size)
+
+        from functools import partial
+
+        session = tf.compat.v1.Session()
+        tf_func = partial(tensorflow_function, size=(128, 128))
+        f_pt = tfpyth.wrap_torch_from_tensorflow(tf_func, ["a"], [(None, 64, 64, 1)], session)
+        x = th.ones((1, 64, 64, 1), dtype=th.float32)
+        y = f_pt(x)
+        assert y.shape == (1, 128, 128, 1)
+
+    def test_no_gradient_operation(self):
+        def tensorflow_function(a, size=(128, 128)):
+            return tf.image.resize(a, size=size)
+
+        from functools import partial
+
+        session = tf.compat.v1.Session()
+        tf_func = partial(tensorflow_function, size=(128, 128))
+        f_pt = tfpyth.wrap_torch_from_tensorflow(tf_func, ["a"], [(None, 64, 64, 1)], session)
+        x = th.ones((1, 64, 64, 1), dtype=th.float32, requires_grad=False)
+        conv = th.nn.Conv2d(1, 1, 1)
+        x = conv(tfpyth.th_2D_channels_last_to_first(x))
+        x = tfpyth.th_2D_channels_first_to_last(x)
+        y = f_pt(x)
+
+        assert y.shape == (1, 128, 128, 1)
+        assert y.sum().backward() is None
+        assert conv.bias.grad
+
+    def test_tensorflow_in_pytorch(self):
+        session = tf.compat.v1.Session()
+
+        def get_tf_function(a, b):
+            c = 3 * a + 4 * b * b
+
+            return c
+
+        session = tf.compat.v1.Session()
+        f = tfpyth.wrap_torch_from_tensorflow(get_tf_function, ["a", "b"], None, session=session)
+        a_ = th.tensor(1, dtype=th.float32, requires_grad=True)
+        b_ = th.tensor(3, dtype=th.float32, requires_grad=True)
+        x = f(a_, b_)
+
+        assert x == 39.0
+
+        x.backward()
+
+        assert np.allclose((a_.grad, b_.grad), (3.0, 24.0))

@@ -48,11 +48,42 @@ x.backward()
 assert np.allclose((a.grad, b.grad), (3., 24.))
 ```
 
+or simply wrap an existing tensorflow function
+
+```python
+def tf_function(a, b):
+    c = 3 * a + 4 * b * b
+
+    return c
+
+session = tf.compat.v1.Session()
+f = tfpyth.wrap_torch_from_tensorflow(
+        tf_function, ["a", "b"], None, session=session
+    ) # automatically creates placeholders inside
+
+a_ = th.tensor(1, dtype=th.float32, requires_grad=True)
+b_ = th.tensor(3, dtype=th.float32, requires_grad=True)
+x = f(a_, b_)
+
+assert x == 39.0
+
+x.backward()
+
+assert np.allclose((a_.grad, b_.grad), (3.0, 24.0))
+```
+
+* see `tests` for more examples
+
+
 ## What it's got
 
 ### `torch_from_tensorflow`
 
 Creates a PyTorch function that is differentiable by evaluating a TensorFlow output tensor given input placeholders.
+
+### `wrap_torch_from_tensorflow`
+
+Wrap a TensorFlow function into a PyTorch function and automatically create placeholders
 
 ### `eager_tensorflow_from_torch`
 
@@ -61,6 +92,8 @@ Creates an eager Tensorflow function from a PyTorch function.
 ### `tensorflow_from_torch`
 
 Creates a TensorFlow op/tensor from a PyTorch function.
+
+
 
 ## Future work
 

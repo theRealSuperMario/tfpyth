@@ -56,7 +56,7 @@ def torch_from_tensorflow(tf_session, tf_inputs, tf_output, tf_dtype=tf.float32)
 
         # See https://www.janfreyberg.com/blog/2019-04-01-testing-pytorch-functions/ for why "no cover"
         @staticmethod
-        def backward(ctx, grad_output): # pragma: no cover
+        def backward(ctx, grad_output):  # pragma: no cover
             th_inputs = ctx.saved_tensors
 
             feed_dict = {}
@@ -67,6 +67,39 @@ def torch_from_tensorflow(tf_session, tf_inputs, tf_output, tf_dtype=tf.float32)
             return tuple(th.as_tensor(tf_gradient) for tf_gradient in tf_gradients)
 
     return _TensorFlowFunction()
+
+
+def wrap_torch_from_tensorflow(func, tensor_inputs, input_shapes=None, session=None):
+    """wrap func using `torch_from_tensorflow` and automatically create placeholders.
+
+    By default, placeholders are assumed to be `tf.float32`.
+
+    :param func: Callable.
+        Tensorflow function to evaluate
+    :param tensor_input: List[str] 
+        List of argument names to `func` that represent a tensor input.
+    :param input_shapes: List[Tuple[Int]]. 
+        Shapes of input tensors if known. Some operations require these, such as all `tf.image.resize`.
+        Basically these values are fed to `tf.placeholder`, so you can indicate unknown parameters using `(None, 64, 64, 1)`, for instance.
+    :param session: tf.compat.v1.Session
+        A session. If None, will instantiate new session.
+    
+    """
+    if session:
+        session = tf.compat.v1.Session()
+    if input_shapes is not None:
+        if len(tensor_inputs) != len(input_shapes):
+            raise ValueError("Number of tensor inputs does not match number of input shapes")
+        else:
+            placeholders = {
+                arg_name: tf.compat.v1.placeholder(tf.float32, shape=shape, name=arg_name)
+                for arg_name, shape in zip(tensor_inputs, input_shapes)
+            }
+    else:
+        placeholders = {arg_name: tf.compat.v1.placeholder(tf.float32, name=arg_name) for arg_name in tensor_inputs}
+    output = func(**placeholders)
+    f = torch_from_tensorflow(session, [placeholders[t] for t in tensor_inputs], output).apply
+    return f
 
 
 def eager_tensorflow_from_torch(func):
@@ -106,3 +139,27 @@ def tensorflow_from_torch(func, inp, Tout, name=None):
     eager_compute = eager_tensorflow_from_torch(func)
 
     return tf.py_function(eager_compute, inp, Tout, name=name)
+
+
+def tf_NCHW_to_NHWC(x):
+    return tf.transpose(x, (0, 2, 3, 1))
+
+
+def tf_NHWC_to_NCHW(x):
+    return tf.transpose(x, (0, 3, 1, 2))
+
+
+tf_2D_channels_first_to_last = tf_NCHW_to_NHWC
+tf_2D_channels_last_to_first = tf_NHWC_to_NCHW
+
+
+def th_NCHW_to_NHWC(x):
+    return x.permute((0, 2, 3, 1))
+
+
+def th_NHWC_to_NCHW(x):
+    return x.permute((0, 3, 1, 2))
+
+
+th_2D_channels_last_to_first = th_NHWC_to_NCHW
+th_2D_channels_first_to_last = th_NCHW_to_NHWC
