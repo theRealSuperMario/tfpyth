@@ -109,3 +109,23 @@ class Test_wrap_torch_from_tensorflow:
         x.backward()
 
         assert np.allclose((a_.grad, b_.grad), (3.0, 24.0))
+
+    def test_autodetect_varnames(self):
+        session = tf.compat.v1.Session()
+
+        def get_tf_function(a, b):
+            c = 3 * a + 4 * b * b
+
+            return c
+
+        session = tf.compat.v1.Session()
+        f = tfpyth.wrap_torch_from_tensorflow(get_tf_function)
+        a_ = th.tensor(1, dtype=th.float32, requires_grad=True)
+        b_ = th.tensor(3, dtype=th.float32, requires_grad=True)
+        x = f(a_, b_)
+
+        assert x == 39.0
+
+        x.backward()
+
+        assert np.allclose((a_.grad, b_.grad), (3.0, 24.0))

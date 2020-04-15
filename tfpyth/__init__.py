@@ -69,7 +69,7 @@ def torch_from_tensorflow(tf_session, tf_inputs, tf_output, tf_dtype=tf.float32)
     return _TensorFlowFunction()
 
 
-def wrap_torch_from_tensorflow(func, tensor_inputs, input_shapes=None, session=None):
+def wrap_torch_from_tensorflow(func, tensor_inputs=None, input_shapes=None, session=None):
     """wrap func using `torch_from_tensorflow` and automatically create placeholders.
 
     By default, placeholders are assumed to be `tf.float32`.
@@ -85,8 +85,11 @@ def wrap_torch_from_tensorflow(func, tensor_inputs, input_shapes=None, session=N
         A session. If None, will instantiate new session.
     
     """
-    if session:
+    if session is None:
         session = tf.compat.v1.Session()
+    if tensor_inputs is None:
+        tensor_inputs = func.__code__.co_varnames[: func.__code__.co_argcount]
+
     if input_shapes is not None:
         if len(tensor_inputs) != len(input_shapes):
             raise ValueError("Number of tensor inputs does not match number of input shapes")
