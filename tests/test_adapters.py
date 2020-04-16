@@ -57,6 +57,60 @@ def test_tensorflow_in_pytorch():
     assert np.allclose((a_.grad, b_.grad), (3.0, 24.0))
 
 
+class Test_tensorflow_in_pytorch:
+    def test_single_output(self):
+        session = tf.Session()
+
+        def get_tf_function():
+            a = tf.placeholder(tf.float32, name="a")
+            b = tf.placeholder(tf.float32, name="b")
+            c = 3 * a + 4 * b * b
+
+            f = tfpyth.torch_from_tensorflow(session, [a, b], c).apply
+            return f
+
+        f = get_tf_function()
+        a_ = th.tensor(1, dtype=th.float32, requires_grad=True)
+        b_ = th.tensor(3, dtype=th.float32, requires_grad=True)
+        x = f(a_, b_)
+
+        assert x == 39.0
+
+        x.backward()
+
+        assert np.allclose((a_.grad, b_.grad), (3.0, 24.0))
+
+    def test_multiple_outputs(self):
+        session = tf.Session()
+
+        def get_tf_function():
+            a = tf.placeholder(tf.float32, name="a")
+            b = tf.placeholder(tf.float32, name="b")
+            c = 3 * a + 4 * b * b
+            d = 6 * a + 8 * b ** 2
+
+            f = tfpyth.torch_from_tensorflow(session, [a, b], [c, d])
+            f1, f2 = [ff.apply for ff in f]
+            return f1, f2
+
+        f1, f2 = get_tf_function()
+
+        def f(a, b):
+            return f1(a, b), f2(a, b)
+
+        a_ = th.tensor(1, dtype=th.float32, requires_grad=True)
+        b_ = th.tensor(3, dtype=th.float32, requires_grad=True)
+        x1, x2 = f(a_, b_)
+
+        assert x1 == 39.0
+        assert x2 == 78.0
+
+        x1.backward()
+        x2.backward()
+
+        assert np.allclose((a_.grad, b_.grad), (9.0, 72.0))
+
+
 class Test_wrap_torch_from_tensorflow:
     def test_image_operation(self):
         def tensorflow_function(a, size=(128, 128)):
@@ -97,6 +151,27 @@ class Test_wrap_torch_from_tensorflow:
             c = 3 * a + 4 * b * b
 
             return c
+
+        session = tf.compat.v1.Session()
+        f = tfpyth.wrap_torch_from_tensorflow(get_tf_function, ["a", "b"], None, session=session)
+        a_ = th.tensor(1, dtype=th.float32, requires_grad=True)
+        b_ = th.tensor(3, dtype=th.float32, requires_grad=True)
+        x = f(a_, b_)
+
+        assert x == 39.0
+
+        x.backward()
+
+        assert np.allclose((a_.grad, b_.grad), (3.0, 24.0))
+
+    def test_multiple_outputs(self):
+        session = tf.compat.v1.Session()
+
+        def get_tf_function(a, b):
+            c = 3 * a + 4 * b * b
+            d = 6 * a + 8 * b ** 2
+
+            return c, d
 
         session = tf.compat.v1.Session()
         f = tfpyth.wrap_torch_from_tensorflow(get_tf_function, ["a", "b"], None, session=session)

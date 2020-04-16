@@ -1,5 +1,6 @@
 import tensorflow as tf
 import torch as th
+import functools
 
 
 class TensorFlowFunction(th.autograd.Function):
@@ -13,7 +14,7 @@ class TensorFlowFunction(th.autograd.Function):
     gradient_outputs = None
 
 
-def torch_from_tensorflow(tf_session, tf_inputs, tf_output, tf_dtype=tf.float32):
+def torch_from_tensorflow(tf_session, tf_inputs, tf_outputs, tf_dtype=tf.float32):
     """
     Create a PyTorch TensorFlowFunction with forward and backward methods which executes evaluates the passed
     TensorFlow tensors.
@@ -31,42 +32,54 @@ def torch_from_tensorflow(tf_session, tf_inputs, tf_output, tf_dtype=tf.float32)
     :return: TensorflowFunction which can be applied to PyTorch tensors.
     """
     # create gradient placeholders
-    tf_gradient_placeholder = tf.placeholder(dtype=tf_dtype, name=f"gradient")
-    tf_gradient_outputs = tf.gradients(
-        ys=tf_output, xs=tf_inputs, grad_ys=[tf_gradient_placeholder], unconnected_gradients="zero"
-    )
 
-    class _TensorFlowFunction(TensorFlowFunction):
-        inputs = tf_inputs
-        output = tf_output
-        gradient_placeholder = tf_gradient_placeholder
-        gradient_outputs = tf_gradient_outputs
+    def _torch_from_tensorflow(tf_session, tf_inputs, tf_output, tf_dtype=tf.float32):
+        tf_gradient_placeholder = tf.placeholder(dtype=tf_dtype, name=f"gradient")
+        tf_gradient_outputs = tf.gradients(
+            ys=tf_output, xs=tf_inputs, grad_ys=[tf_gradient_placeholder], unconnected_gradients="zero"
+        )
 
-        @staticmethod
-        def forward(ctx, *args):
-            assert len(args) == len(tf_inputs)
+        class _TensorFlowFunction(TensorFlowFunction):
+            inputs = tf_inputs
+            output = tf_output
+            gradient_placeholder = tf_gradient_placeholder
+            gradient_outputs = tf_gradient_outputs
 
-            feed_dict = {tf_input: th_input.detach().numpy() for tf_input, th_input in zip(tf_inputs, args)}
-            output = tf_session.run(tf_output, feed_dict)
+            @staticmethod
+            def forward(ctx, *args):
+                assert len(args) == len(tf_inputs)
 
-            ctx.save_for_backward(*args)
+                feed_dict = {tf_input: th_input.detach().numpy() for tf_input, th_input in zip(tf_inputs, args)}
+                output = tf_session.run(tf_output, feed_dict)
 
-            th_output = th.as_tensor(output)
-            return th_output
+                ctx.save_for_backward(*args)
 
-        # See https://www.janfreyberg.com/blog/2019-04-01-testing-pytorch-functions/ for why "no cover"
-        @staticmethod
-        def backward(ctx, grad_output):  # pragma: no cover
-            th_inputs = ctx.saved_tensors
+                th_output = th.as_tensor(output)
+                return th_output
 
-            feed_dict = {}
-            feed_dict.update({tf_input: th_input.detach().numpy() for tf_input, th_input in zip(tf_inputs, th_inputs)})
-            feed_dict.update({tf_gradient_placeholder: grad_output.detach().numpy()})
+            # See https://www.janfreyberg.com/blog/2019-04-01-testing-pytorch-functions/ for why "no cover"
+            @staticmethod
+            def backward(ctx, grad_output):  # pragma: no cover
+                th_inputs = ctx.saved_tensors
 
-            tf_gradients = tf_session.run(tf_gradient_outputs, feed_dict)
-            return tuple(th.as_tensor(tf_gradient) for tf_gradient in tf_gradients)
+                feed_dict = {}
+                feed_dict.update(
+                    {tf_input: th_input.detach().numpy() for tf_input, th_input in zip(tf_inputs, th_inputs)}
+                )
+                feed_dict.update({tf_gradient_placeholder: grad_output.detach().numpy()})
 
-    return _TensorFlowFunction()
+                tf_gradients = tf_session.run(tf_gradient_outputs, feed_dict)
+                return tuple(th.as_tensor(tf_gradient) for tf_gradient in tf_gradients)
+
+        return _TensorFlowFunction()
+
+    if isinstance(tf_outputs, list):
+        output_functions = []
+        for tf_output in tf_outputs:
+            output_functions.append(_torch_from_tensorflow(tf_session, tf_inputs, tf_output, tf_dtype))
+        return output_functions
+    else:
+        return _torch_from_tensorflow(tf_session, tf_inputs, tf_outputs, tf_dtype)
 
 
 def wrap_torch_from_tensorflow(func, tensor_inputs=None, input_shapes=None, session=None):
@@ -89,6 +102,8 @@ def wrap_torch_from_tensorflow(func, tensor_inputs=None, input_shapes=None, sess
     if session is None:
         session = tf.compat.v1.Session()
     if tensor_inputs is None:
+        if isinstance(func, functools.partial):
+            func = func.func
         tensor_inputs = func.__code__.co_varnames[: func.__code__.co_argcount]
 
     if input_shapes is not None:
