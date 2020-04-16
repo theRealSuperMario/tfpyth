@@ -82,7 +82,7 @@ def torch_from_tensorflow(tf_session, tf_inputs, tf_outputs, tf_dtype=tf.float32
         return _torch_from_tensorflow(tf_session, tf_inputs, tf_outputs, tf_dtype)
 
 
-def wrap_torch_from_tensorflow(func, tensor_inputs=None, input_shapes=None, session=None):
+def wrap_torch_from_tensorflow(func, tensor_inputs=None, input_shapes=None, input_dtypes=None, session=None):
     """wrap func using `torch_from_tensorflow` and automatically create placeholders.
 
     By default, placeholders are assumed to be `tf.float32`.
@@ -95,6 +95,8 @@ def wrap_torch_from_tensorflow(func, tensor_inputs=None, input_shapes=None, sess
     :param input_shapes: List[Tuple[Int]]. 
         Shapes of input tensors if known. Some operations require these, such as all `tf.image.resize`.
         Basically these values are fed to `tf.placeholder`, so you can indicate unknown parameters using `(None, 64, 64, 1)`, for instance.
+    :param input_dtypes: List[tf.dtype].
+        Data types to associate inputs with. By default, will treat all inputs as `tf.float32`
     :param session: tf.compat.v1.Session
         A session. If None, will instantiate new session.
     """
@@ -109,10 +111,19 @@ def wrap_torch_from_tensorflow(func, tensor_inputs=None, input_shapes=None, sess
         if len(tensor_inputs) != len(input_shapes):
             raise ValueError("Number of tensor inputs does not match number of input shapes")
         else:
-            placeholders = {
-                arg_name: tf.compat.v1.placeholder(tf.float32, shape=shape, name=arg_name)
-                for arg_name, shape in zip(tensor_inputs, input_shapes)
-            }
+            if input_dtypes is not None:
+                if len(input_dtypes) != len(input_shapes):
+                    raise ValueError("Number of tensor input dtypes does not match number of input shapes")
+                else:
+                    placeholders = {
+                        arg_name: tf.compat.v1.placeholder(shape=shape, dtype=dtype, name=arg_name)
+                        for arg_name, shape, dtype in zip(tensor_inputs, input_shapes, input_dtypes)
+                    }
+            else:
+                placeholders = {
+                    arg_name: tf.compat.v1.placeholder(tf.float32, shape=shape, name=arg_name)
+                    for arg_name, shape in zip(tensor_inputs, input_shapes)
+                }
     else:
         placeholders = {arg_name: tf.compat.v1.placeholder(tf.float32, name=arg_name) for arg_name in tensor_inputs}
     outputs = func(**placeholders)

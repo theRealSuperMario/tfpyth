@@ -120,7 +120,7 @@ class Test_wrap_torch_from_tensorflow:
 
         session = tf.compat.v1.Session()
         tf_func = partial(tensorflow_function, size=(128, 128))
-        f_pt = tfpyth.wrap_torch_from_tensorflow(tf_func, ["a"], [(None, 64, 64, 1)], session)
+        f_pt = tfpyth.wrap_torch_from_tensorflow(tf_func, ["a"], [(None, 64, 64, 1)], session=session)
         x = th.ones((1, 64, 64, 1), dtype=th.float32)
         y = f_pt(x)
         assert y.shape == (1, 128, 128, 1)
@@ -133,7 +133,7 @@ class Test_wrap_torch_from_tensorflow:
 
         session = tf.compat.v1.Session()
         tf_func = partial(tensorflow_function, size=(128, 128))
-        f_pt = tfpyth.wrap_torch_from_tensorflow(tf_func, ["a"], [(None, 64, 64, 1)], session)
+        f_pt = tfpyth.wrap_torch_from_tensorflow(tf_func, ["a"], [(None, 64, 64, 1)], session=session)
         x = th.ones((1, 64, 64, 1), dtype=th.float32, requires_grad=False)
         conv = th.nn.Conv2d(1, 1, 1)
         x = conv(tfpyth.th_2D_channels_last_to_first(x))
@@ -184,7 +184,7 @@ class Test_wrap_torch_from_tensorflow:
 
         x1.backward()
         assert np.allclose((a_.grad, b_.grad), (3.0, 24.0))
-        x2.backward() # partial derivatives are additive
+        x2.backward()  # partial derivatives are additive
         assert np.allclose((a_.grad, b_.grad), (9.0, 72.0))
 
     def test_autodetect_varnames(self):
