@@ -177,13 +177,15 @@ class Test_wrap_torch_from_tensorflow:
         f = tfpyth.wrap_torch_from_tensorflow(get_tf_function, ["a", "b"], None, session=session)
         a_ = th.tensor(1, dtype=th.float32, requires_grad=True)
         b_ = th.tensor(3, dtype=th.float32, requires_grad=True)
-        x = f(a_, b_)
+        x1, x2 = f(a_, b_)
 
-        assert x == 39.0
+        assert x1 == 39.0
+        assert x2 == 78.0
 
-        x.backward()
-
+        x1.backward()
         assert np.allclose((a_.grad, b_.grad), (3.0, 24.0))
+        x2.backward() # partial derivatives are additive
+        assert np.allclose((a_.grad, b_.grad), (9.0, 72.0))
 
     def test_autodetect_varnames(self):
         session = tf.compat.v1.Session()

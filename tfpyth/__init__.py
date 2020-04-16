@@ -97,7 +97,6 @@ def wrap_torch_from_tensorflow(func, tensor_inputs=None, input_shapes=None, sess
         Basically these values are fed to `tf.placeholder`, so you can indicate unknown parameters using `(None, 64, 64, 1)`, for instance.
     :param session: tf.compat.v1.Session
         A session. If None, will instantiate new session.
-    
     """
     if session is None:
         session = tf.compat.v1.Session()
@@ -116,8 +115,19 @@ def wrap_torch_from_tensorflow(func, tensor_inputs=None, input_shapes=None, sess
             }
     else:
         placeholders = {arg_name: tf.compat.v1.placeholder(tf.float32, name=arg_name) for arg_name in tensor_inputs}
-    output = func(**placeholders)
-    f = torch_from_tensorflow(session, [placeholders[t] for t in tensor_inputs], output).apply
+    outputs = func(**placeholders)
+
+    if isinstance(outputs, tuple):
+        fs = [
+            torch_from_tensorflow(session, [placeholders[t] for t in tensor_inputs], output).apply for output in outputs
+        ]
+
+        def f(*args):
+            return [ff(*args) for ff in fs]
+
+    else:
+        output = outputs
+        f = torch_from_tensorflow(session, [placeholders[t] for t in tensor_inputs], output).apply
     return f
 
 
