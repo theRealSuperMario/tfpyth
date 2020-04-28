@@ -102,6 +102,20 @@ Creates an eager Tensorflow function from a PyTorch function.
 Creates a TensorFlow op/tensor from a PyTorch function.
 
 
+## Notes on session management
+
+
+* when using `wrap_torch_from_tensorflow` without `session` argument, a (singleton) session will be created in the background and used for every call to `wrap_torch_from_tensorflow`. 
+* one can access this session using
+
+```python
+import tfpyth
+
+session = tfpyth.SingleSession.get_session()
+
+```
+
+
 
 ## Future work
 
