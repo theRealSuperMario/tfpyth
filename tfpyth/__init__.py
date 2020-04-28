@@ -3,6 +3,17 @@ import torch as th
 import functools
 
 
+class SingleSession:
+    instance = None
+    """https://python-3-patterns-idioms-test.readthedocs.io/en/latest/Singleton.html"""
+
+    def __init__(self):
+        if not SingleSession.instance:
+            SingleSession.instance = tf.compat.v1.Session()
+
+    def get_session(self):
+        return SingleSession.instance
+
 class TensorFlowFunction(th.autograd.Function):
     """
     Wrapper class for Tensorflow input/output nodes (incl gradient) in PyTorch.
@@ -49,7 +60,15 @@ def torch_from_tensorflow(tf_session, tf_inputs, tf_outputs, tf_dtype=tf.float32
             def forward(ctx, *args):
                 assert len(args) == len(tf_inputs)
 
-                feed_dict = {tf_input: th_input.detach().numpy() for tf_input, th_input in zip(tf_inputs, args)}
+                feed_dict = {}
+                for tf_input, th_input in zip(tf_inputs, args):
+                    if th_input.is_cuda:
+                        feed_dict[tf_input] = th_input.cpu().detach().numpy()
+                    else:
+                        feed_dict[tf_input] = th_input.detach().numpy()
+
+                # TODO: write test for cuda tensors
+                # feed_dict = {tf_input: th_input.detach().numpy() for tf_input, th_input in zip(tf_inputs, args)}
                 output = tf_session.run(tf_output, feed_dict)
 
                 ctx.save_for_backward(*args)
@@ -101,7 +120,7 @@ def wrap_torch_from_tensorflow(func, tensor_inputs=None, input_shapes=None, inpu
         A session. If None, will instantiate new session.
     """
     if session is None:
-        session = tf.compat.v1.Session()
+        session = SingleSession().get_session()
     if tensor_inputs is None:
         if isinstance(func, functools.partial):
             func = func.func
